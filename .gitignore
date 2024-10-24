@@ -27,8 +27,7 @@ tf_model.h5
 # Datasets
 datasets/
 wikisql/
-spider/
-*.jsonl
+
 
 # Results and Checkpoints
 results/

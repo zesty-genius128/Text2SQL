@@ -48,10 +48,19 @@ def load_data(fpath):
 def generate_sql(question, table_id, schema):
     # Create an input string for the model
     schema_str = ", ".join(schema[table_id])
-    input_str = f"translate English to SQL: {question} | Table: {schema_str}"
+    
+    # Clean the question to avoid unneeded phrases
+    doc = nlp(question)
+    filtered_question = " ".join([token.text for token in doc if not token.is_stop])
+    
+    input_str = f"translate English to SQL: {filtered_question} | Table: {schema_str}"
     
     # Generate SQL using the specialized SQL model
     sql_query = nlp_model(input_str, max_length=150)[0]['generated_text']
+    
+    # Post-processing: Replace generic placeholders with actual table names
+    sql_query = sql_query.replace('data_table', table_id)
+    
     return sql_query
 
 def log_results(question, generated_sql, result_file):
@@ -86,7 +95,7 @@ def main():
         log_results(question, generated_sql, result_file)
 
         # Optional: Break the loop for demonstration purposes
-        if i >= 50:  # Limit to 50 queries for testing
+        if i >= 10:  # Limit to 50 queries for testing
             break
 
 if __name__ == "__main__":
