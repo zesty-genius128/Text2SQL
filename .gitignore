@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual Environment
+env/
+venv/
+text2sql_env/
+*.env
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Cache files
+*.cache
+*.log
+*.pickle
+*.pkl
+
+# HuggingFace model outputs
+pytorch_model.bin
+tf_model.h5
+*.ckpt
+
+# Datasets
+datasets/
+wikisql/
+spider/
+*.jsonl
+
+# Results and Checkpoints
+results/
+logs/
+*.pth
+*.pt
+
+# VS Code settings (optional if using VS Code)
+.vscode/
+
+# Flask and API specific
+instance/
+*.pyc
+*.pyo
+
+# System-specific files
+.DS_Store
+Thumbs.db
+
+# Generated Documentation
+doc/
+*.pdf
+*.docx
+
+# Environment files
+*.env
+.env.*
+*.sh
