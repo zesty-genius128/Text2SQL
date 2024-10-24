@@ -25,9 +25,7 @@ tf_model.h5
 *.ckpt
 
 # Datasets
-datasets/
-wikisql/
-spider/
+
 
 # Results and Checkpoints
 results/
