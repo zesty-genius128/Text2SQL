@@ -28,7 +28,6 @@ tf_model.h5
 datasets/
 wikisql/
 spider/
-*.jsonl
 
 # Results and Checkpoints
 results/
