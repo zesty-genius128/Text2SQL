@@ -10,6 +10,10 @@ from tqdm import tqdm
 if not os.path.exists('../logs'):
     os.makedirs('../logs')
 
+# Ensure the 'results' directory exists to store the model and tokenizer
+if not os.path.exists('../results'):
+    os.makedirs('../results')
+
 # Initialize logging in the correct folder
 logging.basicConfig(filename='../logs/sql_generator.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -17,7 +21,7 @@ logging.basicConfig(filename='../logs/sql_generator.log', level=logging.INFO, fo
 model_name = "mrm8488/t5-base-finetuned-wikiSQL"
 
 # Load the tokenizer and model
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 nlp_model = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
 
@@ -70,6 +74,12 @@ def log_results(question, generated_sql, result_file):
         f.write(f"Question: {question}\n")
         f.write(f"Generated SQL: {generated_sql}\n\n")
 
+def save_model():
+    # Save the trained model and tokenizer
+    model.save_pretrained("../results/final_model")
+    tokenizer.save_pretrained("../results/final_tokenizer")
+    logging.info("Model and tokenizer saved.")
+
 def main():
     # Load schema from the jsonl file
     schema = get_schema_from_json('../datasets/data/train.tables.jsonl')
@@ -95,8 +105,11 @@ def main():
         log_results(question, generated_sql, result_file)
 
         # Optional: Break the loop for demonstration purposes
-        if i >= 10:  # Limit to 50 queries for testing
+        if i >= 12:  # Limit to 10 queries for testing
             break
+
+    # Save the model after processing
+    save_model()
 
 if __name__ == "__main__":
     main()
