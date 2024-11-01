@@ -13,7 +13,7 @@ sql_pipeline = pipeline("text2text-generation", model=model, tokenizer=tokenizer
 def generate_sql(query, table_structure):
     # Clean the table structure to generate input for the model
     table_structure_str = ", ".join(table_structure)
-    input_text = f"translate English to SQL: {query} | Table: {table_structure_str}"
+    input_text = f"translate English to SQL: {query} | Table schema: {table_structure_str}"
     
     # Generate SQL using the fine-tuned model
     sql_query = sql_pipeline(input_text, max_length=150)[0]['generated_text']
@@ -37,4 +37,3 @@ if st.button("Generate SQL"):
     
     st.write("Generated SQL Query:")
     st.code(generated_sql)
-

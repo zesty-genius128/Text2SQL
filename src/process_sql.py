@@ -19,8 +19,6 @@ logging.basicConfig(filename='../logs/sql_generator.log', level=logging.INFO, fo
 
 # Use the text-to-SQL model
 model_name = "mrm8488/t5-base-finetuned-wikiSQL"
-
-# Load the tokenizer and model
 tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 nlp_model = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
@@ -36,9 +34,9 @@ def get_schema_from_json(fpath):
     with open(fpath, 'r', encoding='utf-8') as f:
         for line in f:
             entry = json.loads(line)
-            table = str(entry['id'].lower())
-            cols = [str(col.lower()) for col in entry['header']]
-            schema[table] = cols
+            table_id = str(entry['id'].lower())
+            columns = [str(col.lower()) for col in entry['header']]
+            schema[table_id] = columns
     return schema
 
 def load_data(fpath):
@@ -53,17 +51,18 @@ def generate_sql(question, schema_columns):
     # Convert schema columns list to a comma-separated string
     schema_str = ", ".join(schema_columns)
     
-    # Clean the question to avoid unneeded phrases
+    # Use spaCy to filter stopwords and structure the question to enhance model understanding
     doc = nlp(question)
     filtered_question = " ".join([token.text for token in doc if not token.is_stop])
     
-    # Input string for model with schema info
-    input_str = f"translate English to SQL: {filtered_question} | Table: {schema_str}"
-    
+    # Include a hint for relational criteria in the input prompt
+    input_str = f"translate English to SQL: {filtered_question} | Table schema: {schema_str} | match criteria: reference and comparison"
+
     # Generate SQL using the text-to-SQL model
     sql_query = nlp_model(input_str, max_length=150)[0]['generated_text']
     
     return sql_query
+
 
 def log_results(question, generated_sql, result_file):
     # Log results to a file with UTF-8 encoding
@@ -103,8 +102,8 @@ def main():
         log_results(question, generated_sql, result_file)
 
         # Optional: Break the loop for demonstration purposes
-        if i >= 12:  # Limit to 12 queries for testing
-            break
+        if i >= 500:  # Limit to 12 queries for testing
+             break
 
     # Save the model after processing
     save_model()
