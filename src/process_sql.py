@@ -1,68 +1,112 @@
 import json
-import re
+import spacy
+import logging
+import os
+from datetime import datetime
+from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+from tqdm import tqdm
+
+# Ensure the 'logs' directory exists
+if not os.path.exists('../logs'):
+    os.makedirs('../logs')
+
+# Ensure the 'results' directory exists to store the model and tokenizer
+if not os.path.exists('../results'):
+    os.makedirs('../results')
+
+# Initialize logging in the correct folder
+logging.basicConfig(filename='../logs/sql_generator.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Use the text-to-SQL model
+model_name = "mrm8488/t5-base-finetuned-wikiSQL"
+tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+nlp_model = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
+
+# Load spaCy for NLP tasks
+nlp = spacy.load("en_core_web_sm")
+
+# File to store the results
+result_file = "../results/generated_sql_results.txt"
+
+def get_schema_from_json(fpath):
+    schema = {}
+    with open(fpath, 'r', encoding='utf-8') as f:
+        for line in f:
+            entry = json.loads(line)
+            table_id = str(entry['id'].lower())
+            columns = [str(col.lower()) for col in entry['header']]
+            schema[table_id] = columns
+    return schema
 
 def load_data(fpath):
-    """
-    Load the WikiSQL data from a jsonl file.
-    """
     data = []
-    with open(fpath, 'r') as f:
+    with open(fpath, 'r', encoding='utf-8') as f:
         for line in f:
             data.append(json.loads(line))
+    logging.info(f"Loaded {len(data)} examples from {fpath}")
     return data
 
-def get_sql(schema, query):
-    """
-    Generate SQL based on the schema and natural language query.
-    """
-    # Extract column names from schema
-    columns = schema['header']
+def generate_sql(question, schema_columns):
+    # Convert schema columns list to a comma-separated string
+    schema_str = ", ".join(schema_columns)
     
-    # Use regex to find if any of the columns are mentioned in the query
-    selected_column = None
-    for col in columns:
-        if re.search(col, query, re.IGNORECASE):
-            selected_column = col
-            break
+    # Use spaCy to filter stopwords and structure the question to enhance model understanding
+    doc = nlp(question)
+    filtered_question = " ".join([token.text for token in doc if not token.is_stop])
     
-    # If no specific column is mentioned, default to '*'
-    if not selected_column:
-        selected_column = '*'
-    
-    # Try to extract conditions from the query (e.g., for "WHERE" clauses)
-    # For simplicity, let's just look for "for <value>" pattern
-    condition_match = re.search(r'for (.+)', query, re.IGNORECASE)
-    condition_value = condition_match.group(1).strip() if condition_match else None
-    
-    # Build the SQL query
-    if condition_value:
-        sql_query = f"SELECT {selected_column} FROM {schema['header'][0]} WHERE {columns[0]} = '{condition_value}';"
-    else:
-        sql_query = f"SELECT {selected_column} FROM {schema['header'][0]};"
+    # Include a hint for relational criteria in the input prompt
+    input_str = f"translate English to SQL: {filtered_question} | Table schema: {schema_str} | match criteria: reference and comparison"
+
+    # Generate SQL using the text-to-SQL model
+    sql_query = nlp_model(input_str, max_length=150)[0]['generated_text']
     
     return sql_query
+
+
+def log_results(question, generated_sql, result_file):
+    # Log results to a file with UTF-8 encoding
+    with open(result_file, "a", encoding="utf-8") as f:
+        f.write(f"Time: {str(datetime.now())}\n")
+        f.write(f"Question: {question}\n")
+        f.write(f"Generated SQL: {generated_sql}\n\n")
+
+def save_model():
+    # Save the trained model and tokenizer
+    model.save_pretrained("../results/final_model")
+    tokenizer.save_pretrained("../results/final_tokenizer")
+    logging.info("Model and tokenizer saved.")
+
 def main():
-    # Load the schema from the tables.jsonl file
-    train_schema = load_data('../datasets/data/train.tables.jsonl')
+    # Load schema from the jsonl file
+    schema = get_schema_from_json('../datasets/data/train.tables.jsonl')
+    logging.info("Schema loaded successfully")
 
-    # Load the train data from train.jsonl
-    train_data = load_data('../datasets/data/train.jsonl')
+    # Load data from the train set
+    data = load_data('../datasets/data/train.jsonl')
 
-    print(f"Loaded {len(train_data)} training examples.")
+    # Process examples
+    for i, example in enumerate(tqdm(data, desc="Processing")):
+        question = example['question']
+        table_id = example['table_id']
+        
+        logging.info(f"Processing question: {question}")
+        
+        # Generate SQL query
+        generated_sql = generate_sql(question, schema[table_id])
+        
+        print(f"Question: {question}")
+        print(f"Generated SQL: {generated_sql}")
+        
+        # Log results
+        log_results(question, generated_sql, result_file)
 
-    # Process the first query
-    first_entry = train_data[3]
-    question = first_entry['question']
-    table_id = first_entry['table_id']
+        # Optional: Break the loop for demonstration purposes
+        if i >= 500:  # Limit to 12 queries for testing
+             break
 
-    # Find the schema corresponding to table_id
-    schema = next(item for item in train_schema if item['id'] == table_id)
-
-    # Generate SQL (placeholder logic for now)
-    sql_query = get_sql(schema, question)
-    
-    print(f"Question: {question}")
-    print(f"Generated SQL: {sql_query}")
+    # Save the model after processing
+    save_model()
 
 if __name__ == "__main__":
     main()

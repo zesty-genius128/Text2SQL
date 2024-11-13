@@ -24,9 +24,6 @@ pytorch_model.bin
 tf_model.h5
 *.ckpt
 
-# Datasets
-
-
 # Results and Checkpoints
 results/
 logs/
