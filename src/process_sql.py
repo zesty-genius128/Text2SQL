@@ -3,145 +3,129 @@ import spacy
 import logging
 import os
 import re
+import sqlparse
+import sqlite3
 from datetime import datetime
-from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM, Trainer, TrainingArguments
 from tqdm import tqdm
+from datasets import Dataset
+import evaluate
 
-# Ensure the 'logs' directory exists
-if not os.path.exists('../logs'):
-    os.makedirs('../logs')
+# Ensure necessary directories exist
+os.makedirs('../logs', exist_ok=True)
+os.makedirs('../results', exist_ok=True)
 
-# Ensure the 'results' directory exists to store the model and tokenizer
-if not os.path.exists('../results'):
-    os.makedirs('../results')
-
-# Initialize logging
+# Logging setup
 logging.basicConfig(filename='../logs/sql_generator.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Initialize the model and tokenizer
-model_name = "mrm8488/t5-base-finetuned-wikiSQL"
-tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-nlp_model = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
-
-# Load spaCy for NLP tasks
+# Load spaCy for NLP preprocessing
 nlp = spacy.load("en_core_web_sm")
 
-# File to store the results
-result_file = "../results/generated_sql_results.txt"
+# Model and Tokenizer setup
+MODEL_NAME = "mrm8488/t5-base-finetuned-wikiSQL"
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
+model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
+nlp_model = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
 
+# File paths
+RESULT_FILE = "../results/generated_sql_results.txt"
+MODEL_SAVE_DIR = "../results/final_model"
+TOKENIZER_SAVE_DIR = "../results/final_tokenizer"
+
+# Metric initialization
+accuracy_metric = evaluate.load("accuracy")
+
+# Preprocessing Functions
 def preprocess_question(question):
-    """
-    Preprocess the input question by removing special characters,
-    extra spaces, and stopwords using spaCy.
-    """
-    # Remove unnecessary punctuation and extra spaces
-    question = re.sub(r"[^a-zA-Z0-9\s?']", "", question)
-    question = " ".join(question.split())
-
-    # Lowercase the question
-    question = question.lower()
-    
-    # Use spaCy to remove stopwords
+    question = re.sub(r"[^a-zA-Z0-9\s]", "", question).lower()
     doc = nlp(question)
-    filtered_question = " ".join([token.text for token in doc if not token.is_stop])
-
-    logging.info(f"Preprocessed question: {filtered_question}")
-    return filtered_question
+    return " ".join([token.text for token in doc if not token.is_stop])
 
 def preprocess_schema(schema):
-    """
-    Preprocess schema column names by lowercasing and removing unnecessary spaces.
-    """
     return [col.lower().strip() for col in schema]
 
+def clean_generated_sql(sql_query):
+    sql_query = re.sub(r"Match criteria:.*", "", sql_query).strip()
+    sql_query = sqlparse.format(sql_query, reindent=True, keyword_case='upper')
+    return sql_query
+
+# Schema and Data Loading
 def get_schema_from_json(fpath):
-    """
-    Extract table schemas from a JSONL file.
-    """
     schema = {}
     with open(fpath, 'r', encoding='utf-8') as f:
         for line in f:
             entry = json.loads(line)
-            table_id = str(entry['id'].lower())
-            columns = preprocess_schema(entry['header'])
-            schema[table_id] = columns
+            schema[entry['id'].lower()] = preprocess_schema(entry['header'])
     return schema
 
 def load_data(fpath):
-    """
-    Load examples from the dataset file.
-    """
     data = []
     with open(fpath, 'r', encoding='utf-8') as f:
         for line in f:
             data.append(json.loads(line))
-    logging.info(f"Loaded {len(data)} examples from {fpath}")
     return data
 
-def generate_sql(question, schema_columns):
-    """
-    Generate SQL query from an input question and table schema.
-    """
-    # Preprocess question and schema
-    preprocessed_question = preprocess_question(question)
-    schema_str = ", ".join(schema_columns)
-
-    # Build input string for model
-    input_str = (f"translate English to SQL: {preprocessed_question} | "
-                 f"Table schema: {schema_str} | match criteria: reference and comparison")
-
-    # Generate SQL using the model
-    logging.info(f"Model input: {input_str}")
-    sql_query = nlp_model(input_str, max_length=150)[0]['generated_text']
-    return sql_query
-
-def log_results(question, generated_sql, result_file):
-    """
-    Log the generated SQL results into a text file.
-    """
-    with open(result_file, "a", encoding="utf-8") as f:
-        f.write(f"Time: {str(datetime.now())}\n")
-        f.write(f"Question: {question}\n")
-        f.write(f"Generated SQL: {generated_sql}\n\n")
-
+# Save Model
 def save_model():
-    """
-    Save the trained model and tokenizer.
-    """
-    model.save_pretrained("../results/final_model")
-    tokenizer.save_pretrained("../results/final_tokenizer")
+    model.save_pretrained(MODEL_SAVE_DIR)
+    tokenizer.save_pretrained(TOKENIZER_SAVE_DIR)
     logging.info("Model and tokenizer saved.")
 
+# SQL Generation and Evaluation
+def run_and_save_results(data, schema):
+    predictions = []
+    references = []
+
+    with open(RESULT_FILE, "w", encoding="utf-8") as result_f:
+        for example in tqdm(data, desc="Generating SQL"):
+            question = example.get('question', '')
+            table_id = example.get('table_id', '')
+            ground_truth_sql = example.get('query', None)
+
+            if not ground_truth_sql:
+                logging.warning(f"Missing 'query' key for example: {example}")
+                continue
+
+            if table_id in schema:
+                schema_columns = schema[table_id]
+                preprocessed_question = preprocess_question(question)
+                schema_str = ", ".join(schema_columns)
+                input_str = f"translate English to SQL: {preprocessed_question} | Table schema: {schema_str}"
+
+                try:
+                    generated_sql = nlp_model(input_str, max_length=150)[0]['generated_text']
+                    generated_sql = clean_generated_sql(generated_sql)
+                except Exception as e:
+                    logging.error(f"Failed to generate SQL for {question}: {e}")
+                    generated_sql = ""
+
+                result_f.write(f"Question: {question}\n")
+                result_f.write(f"Generated SQL: {generated_sql}\n")
+                result_f.write(f"Ground Truth SQL: {ground_truth_sql}\n\n")
+
+                predictions.append(generated_sql)
+                references.append(ground_truth_sql)
+
+    return predictions, references
+
+# Main Function
 def main():
-    # Load schema and data
-    schema = get_schema_from_json('../datasets/data/train.tables.jsonl')
-    data = load_data('../datasets/data/train.jsonl')
+    schema_path = '../datasets/data/train.tables.jsonl'
+    data_path = '../datasets/data/train.jsonl'
 
-    # Process data
-    for i, example in enumerate(tqdm(data, desc="Processing")):
-        question = example['question']
-        table_id = example['table_id']
-        
-        logging.info(f"Processing question: {question}")
-        
-        if table_id in schema:
-            # Generate SQL query
-            generated_sql = generate_sql(question, schema[table_id])
-            print(f"Question: {question}")
-            print(f"Generated SQL: {generated_sql}")
-            
-            # Log results
-            log_results(question, generated_sql, result_file)
-        else:
-            logging.warning(f"Schema not found for table_id: {table_id}")
-        
-        # Optional: limit for testing
-        if i >= 500:  
-            break
+    schema = get_schema_from_json(schema_path)
+    data = load_data(data_path)
 
-    # Save model
+    # Run and save results
+    predictions, references = run_and_save_results(data, schema)
+
+    # Save model for Streamlit
     save_model()
+
+    # Evaluate Accuracy
+    accuracy = accuracy_metric.compute(predictions=predictions, references=references)
+    logging.info(f"Accuracy: {accuracy['accuracy']:.4f}")
+    print(f"Accuracy: {accuracy['accuracy']:.4f}")
 
 if __name__ == "__main__":
     main()
