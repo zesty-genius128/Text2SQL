@@ -60,6 +60,17 @@ cd NLP_TEXT2SQL
 ### 2. Set Up the Environment
 Create a virtual environment and install dependencies:
 
+Dependencies are provided in requirements.txt:
+
+```
+transformers==4.46.0
+streamlit==1.39.0
+spacy==3.8.2
+torch==2.5.0
+pandas==2.2.3
+tqdm==4.66.5
+Flask==3.0.3
+```
 ```
 python3 -m venv venv
 source venv/bin/activate
@@ -90,9 +101,10 @@ Run the Streamlit app for testing:
 ```
 streamlit run app.py
 Access the app in your browser: http://localhost:8501.
-Input a natural language query and a table schema.
-Click "Generate SQL" to see the result.
 ```
+Input a natural language query and a table schema.
+Click "**Generate SQL**" to see the result.
+
 ### 3. Validate JSONL Files
 To validate dataset files:
 ```
@@ -101,23 +113,7 @@ python src/validation.py
 This script checks for invalid JSON lines and reports errors.
 
 ---
-## Dependencies
-Dependencies are provided in requirements.txt:
 
-```
-transformers==4.46.0
-streamlit==1.39.0
-spacy==3.8.2
-torch==2.5.0
-pandas==2.2.3
-tqdm==4.66.5
-Flask==3.0.3
-```
-**Install with:**
-
-```
-pip install -r requirements.txt
-```
 ### Logs and Outputs
 Logs are stored in the logs/ directory.
 Generated SQL queries are saved in results/generated_sql_results.txt.
