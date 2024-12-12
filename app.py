@@ -1,39 +1,33 @@
 import streamlit as st
-from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
+import re
 
-# Load the trained model and tokenizer
-model_path = "results/final_model"
-tokenizer_path = "results/final_tokenizer"
-model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
-tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
+# Load the model and tokenizer from the previous code
+model = AutoModelForSeq2SeqLM.from_pretrained("mrm8488/t5-base-finetuned-wikiSQL")
+tokenizer = AutoTokenizer.from_pretrained("mrm8488/t5-base-finetuned-wikiSQL")
 
-# Initialize the text-to-SQL pipeline
 sql_pipeline = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
 
+def basic_normalize(text):
+    text = text.lower().strip()
+    text = " ".join(text.split())
+    return text
+
 def generate_sql(query, table_structure):
-    # Clean the table structure to generate input for the model
-    table_structure_str = ", ".join(table_structure)
-    input_text = f"translate English to SQL: {query} | Table schema: {table_structure_str}"
-    
-    # Generate SQL using the fine-tuned model
-    sql_query = sql_pipeline(input_text, max_length=150)[0]['generated_text']
-    
-    return sql_query
+    query = basic_normalize(query)
+    columns = [c.strip().lower() for c in table_structure.split(",")]
+    col_str = ", ".join(columns)
+    input_text = f"translate English to SQL: {query} | Table schema: {col_str}"
+    output = sql_pipeline(input_text, max_length=128)[0]['generated_text']
+    return output
 
-# Streamlit app interface
 st.title("Text-to-SQL Generator")
-st.write("Enter a natural language query and table structure:")
+st.write("Enter a natural language question and your table columns:")
 
-# User input for natural language query
-query = st.text_input("Enter your query", value="What are the names of employees older than 30?")
-
-# User input for table structure
-table_structure = st.text_input("Enter table structure (comma-separated)", value="id, name, age")
+user_query = st.text_input("Question:", "What are the names of employees older than 30?")
+user_schema = st.text_input("Table Schema (comma-separated):", "id, name, age")
 
 if st.button("Generate SQL"):
-    # Parse the table structure and generate SQL query
-    table_structure_list = [col.strip() for col in table_structure.split(",")]
-    generated_sql = generate_sql(query, table_structure_list)
-    
-    st.write("Generated SQL Query:")
-    st.code(generated_sql)
+    sql = generate_sql(user_query, user_schema)
+    st.write("Generated SQL:")
+    st.code(sql)
