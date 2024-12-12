@@ -31,7 +31,6 @@ NLP_TEXT2SQL/
 │       ├── train.jsonl
 │       └── train.tables.jsonl
 ├── logs/
-│   ├── sql_generator_llama.log
 │   ├── sql_generator.log
 │   └── training.log
 ├── results/
