@@ -100,9 +100,10 @@ Logs output to results/generated_sql_results.txt.
 Run the Streamlit app for testing:
 ```
 streamlit run app.py
-Access the app in your browser: http://localhost:8501.
 ```
-Input a natural language query and a table schema.
+- Access the app in your browser: http://localhost:8501.
+
+- Input a natural language query and a table schema.
 Click "**Generate SQL**" to see the result.
 
 ### 3. Validate JSONL Files
