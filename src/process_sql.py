@@ -8,8 +8,6 @@ warnings.filterwarnings("ignore")
 
 # --------------------------------------------------------
 # Model and Tokenizer Loading
-# --------------------------------------------------------
-# Using the recommended model class for seq2seq tasks
 tokenizer = AutoTokenizer.from_pretrained("mrm8488/t5-base-finetuned-wikiSQL")
 model = AutoModelForSeq2SeqLM.from_pretrained("mrm8488/t5-base-finetuned-wikiSQL")
 
@@ -17,7 +15,6 @@ model = AutoModelForSeq2SeqLM.from_pretrained("mrm8488/t5-base-finetuned-wikiSQL
 # Post-processing Function
 # --------------------------------------------------------
 # This function attempts to tidy the output SQL query.
-# It may still need refinement or removal depending on model outputs.
 def postprocess_sql(sql_query):
     # Replace unusual quotation marks and dashes
     sql_query = sql_query.replace("–", "-").replace("’", "'")
@@ -37,7 +34,6 @@ def postprocess_sql(sql_query):
 # --------------------------------------------------------
 def get_sql(question, max_length=64, num_beams=5, repetition_penalty=1.2):
     # Prompt format based on the model's training instructions
-    # You can experiment with different prompt templates
     prompt = f"translate English to SQL: {question}"
     inputs = tokenizer([prompt], return_tensors='pt', truncation=True)
     
