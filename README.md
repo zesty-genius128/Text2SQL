@@ -136,6 +136,7 @@ This project is licensed under the MIT License.
 Contact
 For queries or issues, contact:
 Name: 
-Email: 2001.arjunmalik@gmail.com
-GitHub: arjunmalik11
+
+Email: adamerla128@gmail.com
+GitHub: zesty-genius128
 -->
