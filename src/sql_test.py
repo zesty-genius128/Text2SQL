@@ -5,8 +5,8 @@ from tqdm import tqdm
 
 # Paths to Local WikiSQL Files
 DATASET_DIR = "../datasets/data"  # Adjust this path
-TRAIN_FILE = os.path.join(DATASET_DIR, "train.jsonl")
-TRAIN_TABLES_FILE = os.path.join(DATASET_DIR, "train.tables.jsonl")
+TRAIN_FILE = os.path.join(DATASET_DIR, "test.jsonl")
+TRAIN_TABLES_FILE = os.path.join(DATASET_DIR, "test.tables.jsonl")
 OUTPUT_FILE = os.path.join(DATASET_DIR, "train_human_readable.json")
 OUTPUT_CSV = os.path.join(DATASET_DIR, "train_human_readable.csv")
 
